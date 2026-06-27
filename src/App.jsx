@@ -4,6 +4,8 @@ import Screener from './pages/Screener'
 import InstrumentDetail from './pages/InstrumentDetail'
 import Backtest from './pages/Backtest'
 import Settings from './pages/Settings'
+import Journal from './pages/Journal'
+import Calendar from './pages/Calendar'
 import { useSettings } from './store/settingsStore'
 
 export default function App() {
@@ -17,6 +19,8 @@ export default function App() {
         <Route path="/instrument/:symbol" element={<InstrumentDetail settings={settings} />} />
         <Route path="/backtest" element={<Backtest settings={settings} />} />
         <Route path="/settings" element={<Settings settings={settings} onUpdate={update} />} />
+        <Route path="/journal" element={<Journal />} />
+        <Route path="/calendar" element={<Calendar />} />
       </Routes>
     </div>
   )

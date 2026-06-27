@@ -70,13 +70,22 @@ export default function InstrumentCard({ instrument, quote, score, stopLoss, wat
 
         {score ? (
           <>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-2">
               {dirBadge(score.direction)}
               <span className={`font-bold text-sm ${probColor(score.winProbability)}`}>
                 {score.winProbability}%
               </span>
               <span className="text-xs text-slate-500 ml-auto">RSI {score.rsi?.toFixed(0)}</span>
             </div>
+            {score.rsi != null && score.rsi < 30 && (
+              <div className="text-xs text-orange-400 font-medium mb-2">⚠️ Überverkauft — Umkehr möglich</div>
+            )}
+            {score.rsi != null && score.rsi > 70 && (
+              <div className="text-xs text-yellow-400 font-medium mb-2">⚠️ Überkauft — Rücksetzer möglich</div>
+            )}
+            {score.adx != null && !score.trendStrong && (
+              <div className="text-xs text-slate-500 font-medium mb-2">〰 Schwacher Trend (ADX {score.adx.toFixed(0)}) — Signal vorsichtig werten</div>
+            )}
 
             {stopLoss && (
               <div className="grid grid-cols-3 gap-1.5 text-xs mb-3">

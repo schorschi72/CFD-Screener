@@ -2,6 +2,8 @@ import { NavLink } from 'react-router-dom'
 
 const links = [
   { to: '/', label: '📊 Screener' },
+  { to: '/calendar', label: '📅 Kalender' },
+  { to: '/journal', label: '📓 Journal' },
   { to: '/backtest', label: '🔬 Backtest' },
   { to: '/settings', label: '⚙️ Einstellungen' },
 ]

@@ -264,6 +264,39 @@ export function calcMarketStats(candles) {
   }
 }
 
+// ─── ADX (Average Directional Index) ────────────────────────────────────────
+
+export function calcADX(candles, period = 14) {
+  if (candles.length < period * 2 + 1) return null
+  const trs = [], plusDMs = [], minusDMs = []
+  for (let i = 1; i < candles.length; i++) {
+    const { high, low } = candles[i]
+    const prevClose = candles[i - 1].close
+    const prevHigh = candles[i - 1].high
+    const prevLow = candles[i - 1].low
+    trs.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)))
+    const up = high - prevHigh, down = prevLow - low
+    plusDMs.push(up > down && up > 0 ? up : 0)
+    minusDMs.push(down > up && down > 0 ? down : 0)
+  }
+  let sTR = trs.slice(0, period).reduce((a, b) => a + b, 0)
+  let sPDM = plusDMs.slice(0, period).reduce((a, b) => a + b, 0)
+  let sMDM = minusDMs.slice(0, period).reduce((a, b) => a + b, 0)
+  const dxs = []
+  for (let i = period; i < trs.length; i++) {
+    sTR = sTR - sTR / period + trs[i]
+    sPDM = sPDM - sPDM / period + plusDMs[i]
+    sMDM = sMDM - sMDM / period + minusDMs[i]
+    const pDI = (sPDM / sTR) * 100
+    const mDI = (sMDM / sTR) * 100
+    if (pDI + mDI > 0) dxs.push(Math.abs(pDI - mDI) / (pDI + mDI) * 100)
+  }
+  if (dxs.length < period) return null
+  let adx = dxs.slice(0, period).reduce((a, b) => a + b, 0) / period
+  for (let i = period; i < dxs.length; i++) adx = (adx * (period - 1) + dxs[i]) / period
+  return adx
+}
+
 // ─── Signal Scoring ─────────────────────────────────────────────────────────
 
 export function scoreSignals(candles) {
@@ -275,6 +308,7 @@ export function scoreSignals(candles) {
   const sma20 = calcSMA(closes, 20)
   const sma50 = calcSMA(closes, 50)
   const atrArr = calcATR(candles)
+  const adx = calcADX(candles)
   const last = closes.length - 1
   const rsiVal = rsi[last]
   const macdVal = macdLine[last]
@@ -308,6 +342,8 @@ export function scoreSignals(candles) {
       bearScore += 1; signals.push({ label: 'Abwärtstrend (SMA)', type: 'bear' })
     }
   }
+  // ADX: nur traden wenn Trend stark genug (ADX > 25)
+  const trendStrong = adx != null && adx > 25
 
   const total = bullScore + bearScore
   const winProbability = total === 0 ? 50 : Math.round((bullScore / total) * 100)
@@ -315,7 +351,7 @@ export function scoreSignals(candles) {
 
   return {
     rsi: rsiVal, macd: macdVal, macdSignal: sigVal, macdHist: histVal,
-    bb: bbVal, sma20: sma20[last], sma50: sma50[last], atr,
+    bb: bbVal, sma20: sma20[last], sma50: sma50[last], atr, adx, trendStrong,
     currentPrice, bullScore, bearScore, winProbability, direction, signals,
     strength: total === 0 ? 0 : Math.round((Math.max(bullScore, bearScore) / total) * 100),
   }

@@ -9,15 +9,20 @@ import {
 } from '../services/technicalAnalysis'
 import { analyzeMarket } from '../services/gemini'
 import { useWatchlist } from '../store/watchlistStore'
+import { useAlerts } from '../store/alertsStore'
+import { useJournal } from '../store/journalStore'
 import PriceChart from '../components/PriceChart'
 
 const RANGES = ['1mo', '3mo', '6mo', '1y', '2y']
+const INTERVALS = [{ label: '1T', value: '1d' }, { label: '4H', value: '60m' }, { label: '1H', value: '30m' }]
 
 export default function InstrumentDetail({ settings }) {
   const { symbol } = useParams()
   const navigate = useNavigate()
   const instrument = INSTRUMENTS.find(i => i.symbol === symbol)
   const { isWatched, toggle } = useWatchlist()
+  const { addAlert, alerts, deleteAlert } = useAlerts()
+  const { addTrade } = useJournal()
 
   const [candles, setCandles] = useState([])
   const [quote, setQuote] = useState(null)
@@ -32,6 +37,7 @@ export default function InstrumentDetail({ settings }) {
   const [aiText, setAiText] = useState(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [range, setRange] = useState('6mo')
+  const [interval, setInterval] = useState('1d')
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
 
@@ -40,11 +46,19 @@ export default function InstrumentDetail({ settings }) {
   const [showPivots, setShowPivots] = useState(false)
   const [showFib, setShowFib] = useState(false)
 
+  // Position size calculator
+  const [accountBalance, setAccountBalance] = useState(() => parseFloat(localStorage.getItem('plus500_balance') ?? '10000'))
+  const [riskPct, setRiskPct] = useState(settings.maxLossPercent)
+
+  // Alert form
+  const [alertPrice, setAlertPrice] = useState('')
+  const [alertDir, setAlertDir] = useState('above')
+
   useEffect(() => {
     if (!instrument) return
     setLoading(true)
     setScore(null); setSR([]); setPivots(null); setFibonacci([]); setProjections(null)
-    Promise.all([fetchHistory(symbol, range, '1d'), fetchQuote(symbol)])
+    Promise.all([fetchHistory(symbol, range, interval), fetchQuote(symbol)])
       .then(([hist, q]) => {
         setCandles(hist)
         setQuote(q)
@@ -59,7 +73,7 @@ export default function InstrumentDetail({ settings }) {
         setMarketStats(calcMarketStats(hist))
       })
       .finally(() => setLoading(false))
-  }, [symbol, range, settings.riskLevel, settings.maxLossPercent, settings.holdingDays])
+  }, [symbol, range, interval, settings.riskLevel, settings.maxLossPercent, settings.holdingDays])
 
   async function runAI() {
     if (!settings.geminiApiKey || !score) return
@@ -79,8 +93,8 @@ export default function InstrumentDetail({ settings }) {
   const isUp = change >= 0
   const watched = isWatched(symbol)
 
-  const tabs = ['overview', 'sr', 'projections', 'backtest', 'ai']
-  const tabLabel = { overview: 'Übersicht', sr: 'S&R / Fibonacci', projections: 'Prognosen', backtest: 'Backtest', ai: 'KI-Analyse' }
+  const tabs = ['overview', 'position', 'sr', 'projections', 'backtest', 'alerts', 'ai']
+  const tabLabel = { overview: 'Übersicht', position: '📐 Position', sr: 'S&R / Fib', projections: 'Prognosen', backtest: 'Backtest', alerts: '🔔 Alarme', ai: 'KI' }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
@@ -113,11 +127,20 @@ export default function InstrumentDetail({ settings }) {
         </div>
       </div>
 
-      {/* Range + Chart overlays */}
-      <div className="flex flex-wrap gap-2 mb-3 items-center">
+      {/* Interval + Range + Chart overlays */}
+      <div className="flex flex-wrap gap-2 mb-1 items-center">
+        <div className="flex gap-1 bg-slate-800 rounded p-0.5">
+          {INTERVALS.map(iv => (
+            <button key={iv.value} onClick={() => setInterval(iv.value)}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${interval === iv.value ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+              {iv.label}
+            </button>
+          ))}
+        </div>
+        <div className="w-px h-5 bg-slate-700" />
         {RANGES.map(r => (
           <button key={r} onClick={() => setRange(r)}
-            className={`px-3 py-1 rounded text-xs font-medium ${range === r ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400'}`}
+            className={`px-2.5 py-1 rounded text-xs font-medium ${range === r ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400'}`}
           >{r}</button>
         ))}
         <div className="ml-auto flex gap-2">
@@ -175,6 +198,13 @@ export default function InstrumentDetail({ settings }) {
                 <Row label="SMA 20" value={score.sma20?.toFixed(4)} />
                 <Row label="SMA 50" value={score.sma50?.toFixed(4)} />
                 <Row label="ATR (14)" value={`${score.atr?.toFixed(4)} (${((score.atr / score.currentPrice) * 100).toFixed(2)}%)`} />
+                {score.adx != null && (
+                  <Row label="ADX (14)" value={
+                    <span className={score.adx > 50 ? 'text-emerald-400' : score.adx > 25 ? 'text-yellow-400' : 'text-red-400'}>
+                      {score.adx.toFixed(1)} {score.adx > 25 ? '(Trend aktiv)' : '(Seitwärts)'}
+                    </span>
+                  } />
+                )}
                 <div className="pt-2 border-t border-slate-700">
                   <div className="text-slate-400 text-xs mb-1">Aktive Signale:</div>
                   <div className="flex flex-wrap gap-1">
@@ -443,6 +473,161 @@ export default function InstrumentDetail({ settings }) {
               Nicht genug Daten für Backtest. Wähle einen längeren Zeitraum.
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab: Position Size Calculator */}
+      {activeTab === 'position' && (
+        <div className="space-y-4">
+          <div className="card">
+            <h2 className="font-semibold text-white mb-1">Positions-Größen-Rechner</h2>
+            <p className="text-slate-400 text-xs mb-4">Wie viele Kontrakte darf ich kaufen, ohne mein Risiko-Limit zu überschreiten?</p>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Kontostand (€)</label>
+                <input type="number" value={accountBalance}
+                  onChange={e => { setAccountBalance(+e.target.value); localStorage.setItem('plus500_balance', e.target.value) }}
+                  className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Risiko pro Trade (%)</label>
+                <input type="number" step="0.1" min="0.1" max="10" value={riskPct}
+                  onChange={e => setRiskPct(+e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
+              </div>
+            </div>
+            {stopLoss ? (() => {
+              const riskAmount = accountBalance * (riskPct / 100)
+              const stopDist = Math.abs(stopLoss.entryPrice - stopLoss.stopLoss)
+              const positionSize = stopDist > 0 ? riskAmount / stopDist : 0
+              const notional = positionSize * stopLoss.entryPrice
+              const rrAmount = riskAmount * stopLoss.riskReward
+              return (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                    <div className="bg-slate-700/40 rounded-lg p-3">
+                      <div className="text-red-400 font-bold text-xl">{riskAmount.toFixed(0)} €</div>
+                      <div className="text-slate-400 text-xs mt-1">Max. Risiko</div>
+                    </div>
+                    <div className="bg-slate-700/40 rounded-lg p-3">
+                      <div className="text-blue-400 font-bold text-xl">{positionSize.toFixed(2)}</div>
+                      <div className="text-slate-400 text-xs mt-1">Kontrakte</div>
+                    </div>
+                    <div className="bg-slate-700/40 rounded-lg p-3">
+                      <div className="text-slate-200 font-bold text-xl">{notional.toFixed(0)} €</div>
+                      <div className="text-slate-400 text-xs mt-1">Positionswert</div>
+                    </div>
+                    <div className="bg-slate-700/40 rounded-lg p-3">
+                      <div className="text-emerald-400 font-bold text-xl">{rrAmount.toFixed(0)} €</div>
+                      <div className="text-slate-400 text-xs mt-1">Zielgewinn (1:{stopLoss.riskReward})</div>
+                    </div>
+                  </div>
+                  <div className="bg-slate-800 rounded-lg p-3 text-sm space-y-1.5">
+                    <div className="flex justify-between"><span className="text-slate-400">Entry</span><span className="font-mono text-blue-400">{stopLoss.entryPrice.toFixed(4)}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Stop-Loss</span><span className="font-mono text-red-400">{stopLoss.stopLoss.toFixed(4)}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Take-Profit</span><span className="font-mono text-emerald-400">{stopLoss.takeProfit.toFixed(4)}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-400">Stop-Distanz</span><span className="font-mono text-slate-300">{stopDist.toFixed(4)}</span></div>
+                  </div>
+                  <button onClick={() => {
+                    addTrade({
+                      symbol, name: instrument.name,
+                      direction: score.direction,
+                      entry: stopLoss.entryPrice,
+                      sl: stopLoss.stopLoss,
+                      tp: stopLoss.takeProfit,
+                      size: +positionSize.toFixed(2),
+                      notes: `App-Signal: ${score.direction} ${score.winProbability}% | ADX ${score.adx?.toFixed(0) ?? '—'}`,
+                      status: 'open',
+                    })
+                    alert('Trade ins Journal eingetragen!')
+                  }} className="btn-primary text-sm w-full">
+                    📓 Trade ins Journal eintragen
+                  </button>
+                </div>
+              )
+            })() : <div className="text-slate-500 text-sm">Warte auf Signals-Berechnung...</div>}
+          </div>
+
+          {score && (
+            <div className="card">
+              <h2 className="font-semibold text-white mb-3">ADX — Trendstärke</h2>
+              {score.adx != null ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 text-sm">ADX (14)</span>
+                    <span className={`font-bold text-lg ${score.adx > 50 ? 'text-emerald-400' : score.adx > 25 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {score.adx.toFixed(1)}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${score.adx > 50 ? 'bg-emerald-500' : score.adx > 25 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                      style={{ width: `${Math.min(score.adx, 100)}%` }} />
+                  </div>
+                  <div className="text-sm">
+                    {score.adx > 50 && <span className="text-emerald-400">✅ Sehr starker Trend — Signal zuverlässig</span>}
+                    {score.adx > 25 && score.adx <= 50 && <span className="text-yellow-400">⚡ Mäßig starker Trend — Signal beachten</span>}
+                    {score.adx <= 25 && <span className="text-red-400">⚠️ Schwacher Trend / Seitwärts — Signal vorsichtig werten</span>}
+                  </div>
+                  <div className="text-xs text-slate-500">ADX &lt; 25 = kein klarer Trend · 25–50 = Trend vorhanden · &gt; 50 = starker Trend</div>
+                </div>
+              ) : <div className="text-slate-500 text-sm">Nicht genug Daten für ADX.</div>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Alerts */}
+      {activeTab === 'alerts' && (
+        <div className="space-y-4">
+          <div className="card">
+            <h2 className="font-semibold text-white mb-3">Preisalarm setzen</h2>
+            <div className="flex gap-3 items-end flex-wrap">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Alarm bei Preis</label>
+                <input type="number" step="any" value={alertPrice}
+                  onChange={e => setAlertPrice(e.target.value)}
+                  placeholder={quote?.price?.toFixed(4) ?? '—'}
+                  className="w-40 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Richtung</label>
+                <select value={alertDir} onChange={e => setAlertDir(e.target.value)}
+                  className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">
+                  <option value="above">≥ steigt über</option>
+                  <option value="below">≤ fällt unter</option>
+                </select>
+              </div>
+              <button onClick={() => {
+                if (!alertPrice) return
+                addAlert({ symbol, name: instrument.name, targetPrice: parseFloat(alertPrice), direction: alertDir })
+                setAlertPrice('')
+              }} className="btn-primary text-sm">
+                🔔 Alarm setzen
+              </button>
+            </div>
+          </div>
+
+          <div className="card">
+            <h2 className="font-semibold text-white mb-3">Aktive Alarme für {instrument.name}</h2>
+            {alerts.filter(a => a.symbol === symbol).length === 0 ? (
+              <div className="text-slate-500 text-sm">Noch keine Alarme gesetzt.</div>
+            ) : (
+              <div className="space-y-2">
+                {alerts.filter(a => a.symbol === symbol).map(a => (
+                  <div key={a.id} className={`flex items-center justify-between p-3 rounded-lg ${a.triggered ? 'bg-emerald-950/30 border border-emerald-800/30' : 'bg-slate-800'}`}>
+                    <div className="text-sm">
+                      <span className={a.triggered ? 'text-emerald-400' : 'text-slate-300'}>
+                        {a.triggered ? '✅ Ausgelöst' : '⏳ Wartet'} —
+                      </span>
+                      {' '}Preis {a.direction === 'above' ? '≥' : '≤'}{' '}
+                      <span className="font-mono text-white">{a.targetPrice}</span>
+                    </div>
+                    <button onClick={() => deleteAlert(a.id)} className="text-slate-500 hover:text-red-400 text-xs">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

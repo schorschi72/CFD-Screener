@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { INSTRUMENTS, CATEGORIES } from '../data/instruments'
 import { fetchMultipleQuotes, fetchHistory } from '../services/yahooFinance'
 import { scoreSignals, calcStopLoss } from '../services/technicalAnalysis'
 import { useWatchlist } from '../store/watchlistStore'
+import { useAlerts } from '../store/alertsStore'
 import InstrumentCard from '../components/InstrumentCard'
 
 const BATCH = 6
@@ -19,6 +20,8 @@ export default function Screener({ settings }) {
   const [view, setView] = useState('all') // 'all' | 'watchlist'
   const [onlyOpen, setOnlyOpen] = useState(false)
   const { watchlist, isWatched, toggle } = useWatchlist()
+  const { checkAlerts } = useAlerts()
+  const quotesRef = useRef({})
 
   const getFiltered = useCallback((instruments) =>
     instruments.filter(i =>
@@ -47,6 +50,16 @@ export default function Screener({ settings }) {
       setQuotes(prev => {
         const next = { ...prev }
         batchQuotes.forEach((q, i) => { next[batch[i]] = q })
+        quotesRef.current = next
+        // Check price alerts
+        const triggered = checkAlerts(next)
+        triggered.forEach(a => {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification(`🔔 Preisalarm: ${a.name}`, {
+              body: `Kurs ${a.price} hat ${a.direction === 'above' ? '≥' : '≤'} ${a.targetPrice} erreicht!`
+            })
+          }
+        })
         return next
       })
       await Promise.allSettled(batch.map(async sym => {
@@ -74,6 +87,7 @@ export default function Screener({ settings }) {
     if (sortBy === 'change') return (quotes[b.symbol]?.changePercent ?? 0) - (quotes[a.symbol]?.changePercent ?? 0)
     return 0
   }).filter(i => {
+    if (category !== 'Alle') return true   // show all when category is selected
     const s = scores[i.symbol]
     if (!s) return true
     return s.winProbability >= settings.minWinProbability
