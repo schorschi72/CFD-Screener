@@ -7,17 +7,17 @@ export default function Settings({ settings, onUpdate }) {
       <div className="space-y-4">
         {/* API Key */}
         <div className="card">
-          <h2 className="font-semibold text-white mb-4">KI-Analyse (Google Gemini)</h2>
-          <label className="label">Gemini API Key (AI Studio)</label>
+          <h2 className="font-semibold text-white mb-4">KI-Analyse (Claude von Anthropic)</h2>
+          <label className="label">Anthropic API Key</label>
           <input
             type="password"
-            value={settings.geminiApiKey}
-            onChange={e => onUpdate({ geminiApiKey: e.target.value })}
-            placeholder="AIza..."
+            value={settings.claudeApiKey}
+            onChange={e => onUpdate({ claudeApiKey: e.target.value })}
+            placeholder="sk-ant-..."
             className="input font-mono text-sm"
           />
           <p className="text-slate-500 text-xs mt-2">
-            Kostenlos unter <span className="text-blue-400">aistudio.google.com</span> erhältlich.
+            Erhältlich unter <span className="text-blue-400">console.anthropic.com</span>.
             Der Key wird nur lokal in deinem Browser gespeichert.
           </p>
         </div>

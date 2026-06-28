@@ -7,7 +7,7 @@ import {
   findSupportResistance, calcPivotPoints, calcFibonacci,
   buildPriceProjections, calcMarketStats,
 } from '../services/technicalAnalysis'
-import { analyzeMarket } from '../services/gemini'
+import { analyzeMarket } from '../services/claude'
 import { useWatchlist } from '../store/watchlistStore'
 import { useAlerts } from '../store/alertsStore'
 import { useJournal } from '../store/journalStore'
@@ -76,9 +76,9 @@ export default function InstrumentDetail({ settings }) {
   }, [symbol, range, interval, settings.riskLevel, settings.maxLossPercent, settings.holdingDays])
 
   async function runAI() {
-    if (!settings.geminiApiKey || !score) return
+    if (!settings.claudeApiKey || !score) return
     setAiLoading(true)
-    const text = await analyzeMarket(settings.geminiApiKey, instrument.name, score, backtest, sr, pivots, projections, marketStats)
+    const text = await analyzeMarket(settings.claudeApiKey, instrument.name, score, backtest, sr, pivots, projections, marketStats)
     setAiText(text)
     setAiLoading(false)
   }
@@ -639,19 +639,19 @@ export default function InstrumentDetail({ settings }) {
               <h2 className="font-semibold text-white">KI-Marktanalyse</h2>
               <p className="text-slate-500 text-xs">Powered by Google Gemini</p>
             </div>
-            <button onClick={runAI} disabled={aiLoading || !settings.geminiApiKey} className="btn-primary text-sm"
-              title={!settings.geminiApiKey ? 'API Key in Einstellungen hinterlegen' : ''}>
+            <button onClick={runAI} disabled={aiLoading || !settings.claudeApiKey} className="btn-primary text-sm"
+              title={!settings.claudeApiKey ? 'API Key in Einstellungen hinterlegen' : ''}>
               {aiLoading ? '⏳ Analysiere...' : '🤖 Jetzt analysieren'}
             </button>
           </div>
-          {!settings.geminiApiKey && (
+          {!settings.claudeApiKey && (
             <p className="text-slate-500 text-sm">Bitte Gemini API Key in den <a href="#/settings" className="text-blue-400 underline">Einstellungen</a> hinterlegen.</p>
           )}
           {aiText ? (
             <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-slate-900 rounded-lg p-4 border border-slate-700 mt-2">
               {aiText}
             </div>
-          ) : settings.geminiApiKey && (
+          ) : settings.claudeApiKey && (
             <p className="text-slate-500 text-sm mt-2">Klicke „Jetzt analysieren" für eine KI-Einschätzung basierend auf den aktuellen technischen Signalen.</p>
           )}
         </div>
