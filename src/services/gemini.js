@@ -1,4 +1,4 @@
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent'
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
 
 export async function analyzeMarket(apiKey, instrumentName, score, backtestResult, sr, pivots, projections, marketStats) {
   if (!apiKey) return null
@@ -65,10 +65,14 @@ Antworte GENAU in diesem Format:
         generationConfig: { temperature: 0.3, maxOutputTokens: 600 },
       }),
     })
-    if (!res.ok) throw new Error('Gemini API error')
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      const msg = err?.error?.message ?? `HTTP ${res.status}`
+      return `❌ Gemini Fehler: ${msg}`
+    }
     const data = await res.json()
-    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? null
-  } catch {
-    return null
+    return data.candidates?.[0]?.content?.parts?.[0]?.text ?? '❌ Keine Antwort von Gemini erhalten.'
+  } catch (e) {
+    return `❌ Verbindungsfehler: ${e.message}`
   }
 }
