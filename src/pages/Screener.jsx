@@ -23,11 +23,13 @@ export default function Screener({ settings }) {
   const { checkAlerts } = useAlerts()
   const quotesRef = useRef({})
 
-  const getFiltered = useCallback((instruments) =>
-    instruments.filter(i =>
+  const getFiltered = useCallback((instruments) => {
+    const term = search.trim().toLowerCase()
+    return instruments.filter(i =>
       (category === 'Alle' || i.category === category) &&
-      (search === '' || i.name.toLowerCase().includes(search.toLowerCase()) || i.symbol.toLowerCase().includes(search.toLowerCase()))
-    ), [category, search])
+      (term === '' || i.name.toLowerCase().includes(term) || i.symbol.toLowerCase().includes(term))
+    )
+  }, [category, search])
 
   const sourceInstruments = view === 'watchlist'
     ? INSTRUMENTS.filter(i => watchlist.includes(i.symbol))
@@ -154,6 +156,7 @@ export default function Screener({ settings }) {
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-3">
         <input type="text" placeholder="Suche..." value={search} onChange={e => setSearch(e.target.value)}
+          autoCapitalize="off" autoCorrect="off" autoComplete="off" spellCheck={false}
           className="input max-w-[180px] text-sm" />
         <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="input max-w-[180px] text-sm">
           <option value="winProbability">Gewinnwahrsch. ↓</option>
