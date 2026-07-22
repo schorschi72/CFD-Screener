@@ -2,6 +2,7 @@ const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemi
 
 export async function analyzeMarket(apiKey, instrumentName, score, backtestResult, sr, pivots, projections, marketStats) {
   if (!apiKey) return null
+  apiKey = apiKey.trim()
 
   const srText = sr?.slice(0, 6).map(l =>
     `${l.type === 'resistance' ? 'Widerstand' : 'Unterstützung'}: ${l.price.toFixed(4)} (${l.distance > 0 ? '+' : ''}${l.distance.toFixed(2)}%)`
@@ -57,7 +58,7 @@ Antworte GENAU in diesem Format:
 **Risiken:** [1-2 wichtigste Risiken]`
 
   try {
-    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    const res = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
