@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 const KEY = 'plus500_settings'
 
 const DEFAULTS = {
-  claudeApiKey: '',
+  geminiApiKey: '',
   riskLevel: 3,        // 1 (konservativ) – 5 (aggressiv)
   maxLossPercent: 3,   // % des Einstiegspreises
   holdingDays: 5,      // Haltedauer in Tagen
