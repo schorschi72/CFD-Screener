@@ -89,7 +89,7 @@ export default function Screener({ settings }) {
     if (sortBy === 'change') return (quotes[b.symbol]?.changePercent ?? 0) - (quotes[a.symbol]?.changePercent ?? 0)
     return 0
   }).filter(i => {
-    if (category !== 'Alle') return true   // show all when category is selected
+    if (search.trim() !== '' || category !== 'Alle') return true   // Suche/Kategorie übersteuert Qualitätsfilter
     const s = scores[i.symbol]
     if (!s) return true
     return s.winProbability >= settings.minWinProbability
@@ -212,7 +212,7 @@ export default function Screener({ settings }) {
         ))}
       </div>
 
-      {sorted.length === 0 && !loading && watchlist.length > 0 && (
+      {sorted.length === 0 && !loading && !(view === 'watchlist' && watchlist.length === 0) && (
         <div className="text-center text-slate-500 py-12">
           Keine Instrumente gefunden. Passe die Filter an.
         </div>
