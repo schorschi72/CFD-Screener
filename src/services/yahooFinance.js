@@ -7,25 +7,56 @@ function buildUrl(path, params = {}) {
   return PROXY + encodeURIComponent(url.toString())
 }
 
+async function fetchJson(url, label) {
+  let res
+  try {
+    res = await fetch(url)
+  } catch (networkErr) {
+    // Typically a CORS error, ad-blocker, or the proxy/host being unreachable.
+    throw new Error(
+      `${label} network error: ${networkErr.message} (check browser console, ad-blocker, or proxy/upstream availability)`
+    )
+  }
+
+  if (!res.ok) {
+    let bodySnippet = ''
+    try {
+      bodySnippet = (await res.text()).slice(0, 200)
+    } catch {
+      // ignore body read failures
+    }
+    throw new Error(
+      `${label} failed: HTTP ${res.status} ${res.statusText}${bodySnippet ? ` — ${bodySnippet}` : ''}`
+    )
+  }
+
+  try {
+    return await res.json()
+  } catch (parseErr) {
+    throw new Error(`${label} returned invalid JSON: ${parseErr.message}`)
+  }
+}
+
 export async function fetchQuote(symbol) {
   const url = buildUrl('/v8/finance/chart/' + symbol, {
     interval: '1d',
     range: '5d',
   })
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('Quote fetch failed')
-  const data = await res.json()
-  const result = data.chart.result[0]
-  const meta = result.meta
+  const data = await fetchJson(url, `Quote fetch for ${symbol}`)
+  const result = data?.chart?.result?.[0]
+  const meta = result?.meta
+  if (!meta) {
+    throw new Error(
+      `Quote fetch for ${symbol} returned an unexpected response shape (chart.result[0].meta missing)`
+    )
+  }
+  const previousClose = meta.previousClose ?? meta.chartPreviousClose
   return {
     symbol,
     price: meta.regularMarketPrice,
-    previousClose: meta.previousClose || meta.chartPreviousClose,
-    change: meta.regularMarketPrice - (meta.previousClose || meta.chartPreviousClose),
-    changePercent:
-      ((meta.regularMarketPrice - (meta.previousClose || meta.chartPreviousClose)) /
-        (meta.previousClose || meta.chartPreviousClose)) *
-      100,
+    previousClose,
+    change: meta.regularMarketPrice - previousClose,
+    changePercent: ((meta.regularMarketPrice - previousClose) / previousClose) * 100,
     currency: meta.currency,
     marketState: meta.marketState,
   }
@@ -33,12 +64,15 @@ export async function fetchQuote(symbol) {
 
 export async function fetchHistory(symbol, range = '1y', interval = '1d') {
   const url = buildUrl('/v8/finance/chart/' + symbol, { interval, range })
-  const res = await fetch(url)
-  if (!res.ok) throw new Error('History fetch failed')
-  const data = await res.json()
-  const result = data.chart.result[0]
-  const timestamps = result.timestamp
-  const ohlcv = result.indicators.quote[0]
+  const data = await fetchJson(url, `History fetch for ${symbol}`)
+  const result = data?.chart?.result?.[0]
+  const timestamps = result?.timestamp
+  const ohlcv = result?.indicators?.quote?.[0]
+  if (!timestamps || !ohlcv) {
+    throw new Error(
+      `History fetch for ${symbol} returned an unexpected response shape (timestamp/indicators missing)`
+    )
+  }
 
   return timestamps.map((ts, i) => ({
     time: ts,
@@ -52,7 +86,11 @@ export async function fetchHistory(symbol, range = '1y', interval = '1d') {
 
 export async function fetchMultipleQuotes(symbols) {
   const results = await Promise.allSettled(symbols.map(fetchQuote))
-  return results.map((r, i) =>
-    r.status === 'fulfilled' ? r.value : { symbol: symbols[i], error: true }
-  )
+  return results.map((r, i) => {
+    if (r.status === 'fulfilled') return r.value
+    if (import.meta.env?.DEV) {
+      console.warn(`[yahooFinance] fetchQuote(${symbols[i]}) failed:`, r.reason)
+    }
+    return { symbol: symbols[i], error: true, errorMessage: r.reason?.message ?? String(r.reason) }
+  })
 }

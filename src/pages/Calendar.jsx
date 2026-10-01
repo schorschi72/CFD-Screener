@@ -23,14 +23,36 @@ export default function Calendar() {
       ? 'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
       : 'https://nfs.faireconomy.media/ff_calendar_nextweek.json'
 
-    fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))
-      .then(r => r.json())
+    const proxiedUrl = 'https://corsproxy.io/?url=' + encodeURIComponent(url)
+
+    fetch(proxiedUrl)
+      .then(async r => {
+        if (!r.ok) {
+          let bodySnippet = ''
+          try { bodySnippet = (await r.text()).slice(0, 200) } catch { /* ignore */ }
+          throw new Error(`Calendar fetch failed: HTTP ${r.status} ${r.statusText}${bodySnippet ? ` — ${bodySnippet}` : ''}`)
+        }
+        try {
+          return await r.json()
+        } catch (parseErr) {
+          throw new Error(`Calendar response was not valid JSON: ${parseErr.message}`)
+        }
+      })
       .then(data => {
+        if (!Array.isArray(data)) {
+          console.warn('[Calendar] Unexpected response shape, expected an array:', data)
+        }
         setEvents(Array.isArray(data) ? data : [])
         setLoading(false)
       })
       .catch(e => {
-        setError('Kalender konnte nicht geladen werden. Bitte später versuchen.')
+        console.error('[Calendar] Fehler beim Laden des Kalenders:', e)
+        setError(
+          `Kalender konnte nicht geladen werden (${e.message}). ` +
+          'Möglicherweise blockiert der Browser, ein Ad-Blocker oder der Proxy (corsproxy.io) den Zugriff. ' +
+          'Details siehe Browser-Konsole.'
+        )
+        setEvents([])
         setLoading(false)
       })
   }, [weekOffset])
