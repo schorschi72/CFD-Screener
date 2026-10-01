@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { fetchViaProxies } from '../services/fetchWithFallback.js'
 
 const IMPACT_COLOR = { High: 'text-red-400', Medium: 'text-yellow-400', Low: 'text-slate-400' }
 const IMPACT_DOT = { High: 'bg-red-500', Medium: 'bg-yellow-500', Low: 'bg-slate-500' }
@@ -16,23 +17,39 @@ export default function Calendar() {
   const [weekOffset, setWeekOffset] = useState(0)
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
     setError(null)
     // ForexFactory public calendar JSON
-    const url = weekOffset === 0
+    const target = weekOffset === 0
       ? 'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
       : 'https://nfs.faireconomy.media/ff_calendar_nextweek.json'
 
-    fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))
-      .then(r => r.json())
-      .then(data => {
-        setEvents(Array.isArray(data) ? data : [])
-        setLoading(false)
-      })
-      .catch(e => {
-        setError('Kalender konnte nicht geladen werden. Bitte später versuchen.')
-        setLoading(false)
-      })
+    async function load() {
+      try {
+        const res = await fetchViaProxies(target, 'Calendar fetch')
+        const data = await res.json()
+        if (!Array.isArray(data)) {
+          throw new Error('Unexpected response format from calendar API')
+        }
+        if (!cancelled) {
+          setEvents(data)
+          setLoading(false)
+        }
+      } catch (e) {
+        console.error('[Calendar] failed to load calendar data:', e)
+        if (!cancelled) {
+          setError(
+            `Kalender konnte nicht geladen werden (${e?.message || 'unbekannter Fehler'}). ` +
+              'Die Datenquelle oder der Proxy ist aktuell nicht erreichbar. Bitte später erneut versuchen.'
+          )
+          setLoading(false)
+        }
+      }
+    }
+
+    load()
+    return () => { cancelled = true }
   }, [weekOffset])
 
   const filtered = events.filter(e => {
