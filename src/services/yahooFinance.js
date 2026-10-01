@@ -7,13 +7,22 @@ function buildUrl(path, params = {}) {
   return PROXY + encodeURIComponent(url.toString())
 }
 
+async function responseError(res, request) {
+  let detail
+  try {
+    const data = await res.json()
+    detail = data?.chart?.error?.description ?? data?.error?.description ?? data?.error?.message
+  } catch {}
+  return `${request} failed (HTTP ${res.status}${detail ? `: ${detail}` : ''})`
+}
+
 export async function fetchQuote(symbol) {
   const url = buildUrl('/v8/finance/chart/' + symbol, {
     interval: '1d',
     range: '5d',
   })
   const res = await fetch(url)
-  if (!res.ok) throw new Error('Quote fetch failed')
+  if (!res.ok) throw new Error(await responseError(res, 'Quote fetch'))
   const data = await res.json()
   const result = data.chart.result[0]
   const meta = result.meta
@@ -34,7 +43,7 @@ export async function fetchQuote(symbol) {
 export async function fetchHistory(symbol, range = '1y', interval = '1d') {
   const url = buildUrl('/v8/finance/chart/' + symbol, { interval, range })
   const res = await fetch(url)
-  if (!res.ok) throw new Error('History fetch failed')
+  if (!res.ok) throw new Error(await responseError(res, 'History fetch'))
   const data = await res.json()
   const result = data.chart.result[0]
   const timestamps = result.timestamp
