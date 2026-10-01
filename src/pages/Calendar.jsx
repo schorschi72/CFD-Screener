@@ -24,13 +24,17 @@ export default function Calendar() {
       : 'https://nfs.faireconomy.media/ff_calendar_nextweek.json'
 
     fetch('https://corsproxy.io/?url=' + encodeURIComponent(url))
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then(data => {
         setEvents(Array.isArray(data) ? data : [])
         setLoading(false)
       })
       .catch(e => {
-        setError('Kalender konnte nicht geladen werden. Bitte später versuchen.')
+        console.error('Wirtschaftskalender konnte nicht geladen werden:', e)
+        setError(`Kalender konnte nicht geladen werden: ${e.message || 'Unbekannter Fehler'}`)
         setLoading(false)
       })
   }, [weekOffset])
