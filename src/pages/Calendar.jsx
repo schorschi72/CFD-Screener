@@ -40,8 +40,9 @@ export default function Calendar() {
         console.error('[Calendar] failed to load calendar data:', e)
         if (!cancelled) {
           setError(
-            `Kalender konnte nicht geladen werden (${e?.message || 'unbekannter Fehler'}). ` +
-              'Die Datenquelle oder der Proxy ist aktuell nicht erreichbar. Bitte später erneut versuchen.'
+            'Kalender konnte nicht geladen werden. Die Datenquelle oder der Proxy ist aktuell nicht ' +
+              'erreichbar oder blockiert die Anfrage. Bitte später erneut versuchen. ' +
+              '(Details siehe Browser-Konsole.)'
           )
           setLoading(false)
         }

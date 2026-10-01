@@ -13,23 +13,24 @@ export const CORS_PROXIES = [
 // error thrown to callers only contains a safe, generic summary suitable
 // for display in the UI.
 export async function fetchViaProxies(target, context, proxies = CORS_PROXIES) {
-  let lastReason = null
+  const reasons = []
   for (const buildProxyUrl of proxies) {
     const proxyUrl = buildProxyUrl(target)
     try {
       const res = await fetch(proxyUrl)
       if (!res.ok) {
-        lastReason = `HTTP ${res.status}`
-        console.error(`[${context}] ${proxyUrl} returned ${lastReason} ${res.statusText || ''}`.trim())
+        const reason = `HTTP ${res.status}`
+        reasons.push(reason)
+        console.error(`[${context}] ${proxyUrl} returned ${reason} ${res.statusText || ''}`.trim())
         continue
       }
       return res
     } catch (err) {
-      lastReason = 'network error'
+      reasons.push('network error')
       console.error(`[${context}] fetch via ${proxyUrl} threw an error:`, err)
     }
   }
   throw new Error(
-    `${context} failed: all data proxies are unreachable or blocked (${lastReason || 'unknown error'}).`
+    `${context} failed: all data proxies are unreachable or blocked (${reasons.join(', ') || 'unknown error'}).`
   )
 }
